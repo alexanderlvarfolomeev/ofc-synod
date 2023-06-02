@@ -1,7 +1,5 @@
 package ru.varfolomeev.messages
 
-import akka.actor.ActorRef
-
 sealed interface OuterMessage
 
 object Launch : OuterMessage

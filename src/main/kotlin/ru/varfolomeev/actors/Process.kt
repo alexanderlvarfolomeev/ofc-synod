@@ -1,7 +1,6 @@
 package ru.varfolomeev.actors
 
 import akka.actor.ActorRef
-import akka.actor.Props
 import ru.varfolomeev.actors.ProcessCondition.*
 import ru.varfolomeev.actors.ProcessCondition.ProposeCondition.*
 import ru.varfolomeev.broadcastMessage
@@ -215,8 +214,4 @@ class Process(
                 event(cond)
             }
         }
-
-    companion object {
-        fun props(processId: Int, processes: List<ActorRef>): Props = Props.create(Process::class.java) { Process(processId, processes) }
-    }
 }
