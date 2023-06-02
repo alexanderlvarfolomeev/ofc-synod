@@ -1,13 +1,12 @@
 package ru.varfolomeev.actors
 
-import akka.actor.DeadLetter
 import akka.actor.Props
 import ru.varfolomeev.messages.AllDecided
 import ru.varfolomeev.messages.CollectorCheck
 import ru.varfolomeev.messages.Decided
 import ru.varfolomeev.messages.InProgress
 
-class Collector(private val processCount: Int) : ReceiveAbstractActor("collector") {
+class Collector(private val processCount: Int, private val faultyCount: Int) : ReceiveAbstractActor("collector") {
     private var count = 0
     private val decisions = Array(processCount) { 0L }
     private var decision: Int? = null
@@ -29,9 +28,9 @@ class Collector(private val processCount: Int) : ReceiveAbstractActor("collector
 
     @OnReceive
     fun receive(check: CollectorCheck) {
-        if (count == processCount) {
+        if (count >= processCount - faultyCount) {
             log.info("All Decided.")
-            sender.tell(AllDecided(decision!!, decisions.max()), self)
+            sender.tell(AllDecided(decision!!, decisions.max(), count), self)
         } else {
             log.info("Decided {} of {} processes.", count, processCount)
             sender.tell(InProgress, self)
@@ -39,7 +38,7 @@ class Collector(private val processCount: Int) : ReceiveAbstractActor("collector
     }
 
     companion object {
-        fun props(processCount: Int): Props =
-            Props.create(Collector::class.java, processCount)
+        fun props(processCount: Int, faultyCount: Int): Props =
+            Props.create(Collector::class.java, processCount, faultyCount)
     }
 }

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
-    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+    <import class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
+    <import class="ch.qos.logback.core.FileAppender"/>
+
+
+    <appender name="FILE" class="FileAppender">
         <file>app.log</file>
         <append>false</append>
         <immediateFlush>false</immediateFlush>
@@ -9,10 +13,11 @@
         </encoder>
     </appender>
 
-    <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
-        <queueSize>8192</queueSize>
-        <neverBlock>true</neverBlock>
+    <appender name="ASYNC" class="ru.varfolomeev.SleepAsyncAppender">
+        <queueSize>1000000</queueSize>
+        <neverBlock>false</neverBlock>
         <maxFlushTime>0</maxFlushTime>
+        <discardingThreshold>0</discardingThreshold>
         <appender-ref ref="FILE" />
     </appender>
 
@@ -20,6 +25,5 @@
         <appender-ref ref="ASYNC"/>
     </root>
 
-    <import class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
     <shutdownHook class="DefaultShutdownHook"/>
 </configuration>

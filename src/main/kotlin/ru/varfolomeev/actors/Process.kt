@@ -7,12 +7,14 @@ import ru.varfolomeev.actors.ProcessCondition.ProposeCondition.*
 import ru.varfolomeev.broadcastMessage
 import ru.varfolomeev.mapInPlace
 import ru.varfolomeev.messages.*
+import kotlin.random.Random
 
 class Process(
     private val processId: Int,
     private val processes: List<ActorRef>
 ) : ReceiveAbstractActor("process#$processId") {
-    private var condition: ProcessCondition = Valid(processId == 0)
+    private var condition: ProcessCondition = Valid()
+    private val fixedProposal: Int = Random.nextInt(2)
 
     private var ballot: Long = (processId - processes.size).toLong()
     private var proposal: Int? = null
@@ -26,24 +28,35 @@ class Process(
     private val majority = processes.size / 2 + 1
 
     @OnReceive
-    fun receive(pass: PassRefs) {
-//        processes = pass.processes
-        tell(Passed, sender)
+    fun receive(crash: Crash) {
+        when (val cond = condition) {
+            Crashed -> {
+                log.error("Crashing crashed process: {}", self.path().name())
+            }
+
+            is FaultProne -> {
+                log.error("Crashing fault-prone process: {}", self.path().name())
+            }
+
+            is Valid -> {
+                condition = FaultProne(crash.crashProbability, cond.proposeCondition)
+            }
+        }
     }
 
     @OnReceive
     fun receive(launch: Launch) {
         when (val cond = condition) {
             Crashed -> {
-                TODO()
+                log.error("Launching crashed process: {}", self.path().name())
             }
 
             is FaultProne -> {
-                TODO()
+                propose(fixedProposal, cond)
             }
 
             is Valid -> {
-                propose(0, cond)
+                propose(fixedProposal, cond)
             }
         }
     }
@@ -52,11 +65,11 @@ class Process(
     fun receive(leader: Leader) {
         when (val cond = condition) {
             Crashed -> {
-                TODO()
+                log.error("Election of crashed process: {}", self.path().name())
             }
 
             is FaultProne -> {
-                TODO()
+                log.error("Election of fault-prone process: {}", self.path().name())
             }
 
             is Valid -> {
@@ -100,7 +113,7 @@ class Process(
 
     @OnReceive
     fun receive(abort: Abort) = wrapProposeEvent {
-        if (ballot == abort.ballot) {
+        if (ballot == abort.ballot && it.proposeCondition == PROPOSE) {
             when (it.leader) {
                 true -> {
                     propose(proposal!!, it)
@@ -185,13 +198,17 @@ class Process(
         log.info("Broadcasted: {}", message)
     }
 
-    private fun wrapProposeEvent(event: (NotCrashed) -> Unit): Unit =
+    private fun wrapProposeEvent(event: (NotCrashed) -> Unit) =
         when (val cond = condition) {
             Crashed -> {
             }
 
             is FaultProne -> {
-                TODO()
+                if (Random.nextDouble() < cond.crashProbability) {
+                    condition = Crashed
+                } else {
+                    event(cond)
+                }
             }
 
             is Valid -> {

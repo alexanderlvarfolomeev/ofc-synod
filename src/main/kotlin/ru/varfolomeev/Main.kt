@@ -2,10 +2,11 @@ package ru.varfolomeev
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.actor.DeadLetter
 import akka.actor.Props
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
+import ch.qos.logback.classic.LoggerContext
+import org.slf4j.LoggerFactory
 import ru.varfolomeev.actors.Collector
 import ru.varfolomeev.actors.Process
 import ru.varfolomeev.messages.*
@@ -13,12 +14,15 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
-class Main(private val processCount: Int) : AutoCloseable {
+class Main(private val processCount: Int, faultyCount: Int, private val faultProbability: Double) : AutoCloseable {
     private val system = ActorSystem.create("process-system-$this")
     private var leaderNumber: Int = 0
     private val processes = ArrayList<ActorRef>(processCount)
-    private val collector = AskableActorRef(system.actorOf(Collector.props(processCount), "collector"))
+    private val faults: List<ActorRef>
+    private val corrects: List<ActorRef>
+    private val collector = AskableActorRef(system.actorOf(Collector.props(processCount, faultyCount), "collector"))
 
     init {
         val latch = CountDownLatch(1)
@@ -31,6 +35,10 @@ class Main(private val processCount: Int) : AutoCloseable {
 
         latch.countDown()
 
+        val shuffled = processes.shuffled(Random)
+        faults = shuffled.take(faultyCount)
+        corrects = shuffled.takeLast(processCount - faultyCount)
+
         system.eventStream.subscribe(collector.actorRef(), Decided::class.java)
     }
 
@@ -38,6 +46,8 @@ class Main(private val processCount: Int) : AutoCloseable {
         val start = System.nanoTime()
 
         broadcastMessage(Launch, processes, ActorRef.noSender())
+
+        broadcastMessage(Crash(faultProbability), faults, ActorRef.noSender())
 
         val cancellable = system.scheduler().scheduleWithFixedDelay(
             Duration.Zero(),
@@ -55,7 +65,13 @@ class Main(private val processCount: Int) : AutoCloseable {
             )) {
                 is AllDecided -> {
                     cancellable.cancel()
-                    system.log().info("All process decided: {} in {} ms", r.value, (r.end - start) * 1e-6)
+                    system.log().info(
+                        "{} of {} process decided: {} in {} ms",
+                        r.count,
+                        processCount,
+                        r.value,
+                        (r.end - start) * 1e-6
+                    )
                     false
                 }
 
@@ -75,14 +91,15 @@ class Main(private val processCount: Int) : AutoCloseable {
     }
 
     private fun changeLeader() {
-        processes.forEachIndexed { idx, actor ->
-            actor.tell(if (leaderNumber % processCount == idx) Leader else Hold, ActorRef.noSender())
+        corrects.forEachIndexed { idx, actor ->
+            actor.tell(if (leaderNumber % corrects.size == idx) Leader else Hold, ActorRef.noSender())
         }
 
         leaderNumber++
     }
 
     override fun close() {
+        (LoggerFactory.getILoggerFactory() as LoggerContext).stop()
         system.terminate()
         print(Await.result(system.whenTerminated(), Duration.Inf()))
     }
@@ -94,7 +111,7 @@ class Main(private val processCount: Int) : AutoCloseable {
 }
 
 fun main(args: Array<String>) {
-    Main(args[0].toInt()).use {
+    Main(args[0].toInt(), args[1].toInt(), args[2].toDouble()).use {
         it.run()
     }
 }
