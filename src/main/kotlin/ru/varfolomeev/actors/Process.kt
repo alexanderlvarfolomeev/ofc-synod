@@ -10,26 +10,25 @@ import ru.varfolomeev.messages.*
 
 class Process(
     private val processId: Int,
-    private val processCount: Int,
+    private val processes: List<ActorRef>
 ) : ReceiveAbstractActor("process#$processId") {
-    private var processes: List<ActorRef> = listOf()
-    private var condition: ProcessCondition = Valid()
+    private var condition: ProcessCondition = Valid(processId == 0)
 
-    private var ballot: Long = (processId - processCount).toLong()
+    private var ballot: Long = (processId - processes.size).toLong()
     private var proposal: Int? = null
     private var readballot: Long = -1
     private var imposeballot: Long = ballot
     private var estimate: Int? = null
-    private val states = Array<Pair<Int?, Long>>(processCount) { null to -1 }
+    private val states = Array<Pair<Int?, Long>>(processes.size) { null to -1 }
     private var stateCount = 0
     private var ackCount = 0
 
-    private val majority = processCount / 2 + 1
+    private val majority = processes.size / 2 + 1
 
     @OnReceive
     fun receive(pass: PassRefs) {
-        processes = pass.processes
-
+//        processes = pass.processes
+        tell(Passed, sender)
     }
 
     @OnReceive
@@ -101,29 +100,33 @@ class Process(
 
     @OnReceive
     fun receive(abort: Abort) = wrapProposeEvent {
-        when (it.leader) {
-            true -> {
-                propose(proposal!!, it)
-            }
+        if (ballot == abort.ballot) {
+            when (it.leader) {
+                true -> {
+                    propose(proposal!!, it)
+                }
 
-            false -> {
-                it.proposeCondition = AWAIT_PROPOSE
+                false -> {
+                    it.proposeCondition = AWAIT_PROPOSE
+                }
             }
         }
     }
 
     @OnReceive
     fun receive(gather: Gather) = wrapProposeEvent {
-        states[gather.processId] = gather.estimate to gather.estballot
-        stateCount++
-        if (stateCount >= majority) {
-            val pair = states.maxBy { it.second }
-            if (pair.second >= 0) {
-                proposal = pair.first
+        if (ballot == gather.ballot) {
+            states[gather.processId] = gather.estimate to gather.estballot
+            stateCount++
+            if (stateCount >= majority) {
+                val pair = states.maxBy { it.second }
+                if (pair.second >= 0) {
+                    proposal = pair.first
+                }
+                states.mapInPlace { null to -1 }
+                stateCount = 0
+                broadcast(Impose(ballot, proposal!!))
             }
-            states.mapInPlace { null to -1 }
-            stateCount = 0
-            broadcast(Impose(ballot, proposal!!))
         }
     }
 
@@ -140,10 +143,12 @@ class Process(
 
     @OnReceive
     fun receive(ack: Ack) = wrapProposeEvent {
-        ackCount++
-        if (ackCount >= majority) {
-            broadcast(Decide(proposal!!))
-            ackCount = 0
+        if (ballot == ack.ballot) {
+            ackCount++
+            if (ackCount >= majority) {
+                ackCount = 0
+                broadcast(Decide(proposal!!))
+            }
         }
     }
 
@@ -164,7 +169,7 @@ class Process(
 
     private fun initialize(value: Int) {
         proposal = value
-        ballot += processCount
+        ballot += processes.size
         states.mapInPlace { null to -1 }
         stateCount = 0
         ackCount = 0
@@ -195,6 +200,6 @@ class Process(
         }
 
     companion object {
-        fun props(processId: Int, processCount: Int): Props = Props.create(Process::class.java, processId, processCount)
+        fun props(processId: Int, processes: List<ActorRef>): Props = Props.create(Process::class.java) { Process(processId, processes) }
     }
 }

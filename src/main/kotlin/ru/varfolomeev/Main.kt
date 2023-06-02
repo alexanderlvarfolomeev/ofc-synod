@@ -3,6 +3,7 @@ package ru.varfolomeev
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.DeadLetter
+import akka.actor.Props
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
 import ru.varfolomeev.actors.Collector
@@ -10,18 +11,27 @@ import ru.varfolomeev.actors.Process
 import ru.varfolomeev.messages.*
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 class Main(private val processCount: Int) : AutoCloseable {
     private val system = ActorSystem.create("process-system-$this")
     private var leaderNumber: Int = 0
-    private val processes = List<ActorRef>(processCount) { system.actorOf(Process.props(it, processCount),"process-$it") }
+    private val processes = ArrayList<ActorRef>(processCount)
     private val collector = AskableActorRef(system.actorOf(Collector.props(processCount), "collector"))
 
     init {
-        system.eventStream.subscribe(collector.actorRef(), Decided::class.java)
+        val latch = CountDownLatch(1)
+        processes.addAll((0 until processCount).map {
+            system.actorOf(Props.create(Process::class.java) {
+                latch.await()
+                Process(it, processes)
+            }, "process-$it")
+        })
 
-        broadcastMessage(PassRefs(processes), processes, ActorRef.noSender())
+        latch.countDown()
+
+        system.eventStream.subscribe(collector.actorRef(), Decided::class.java)
     }
 
     fun run() {
@@ -48,9 +58,11 @@ class Main(private val processCount: Int) : AutoCloseable {
                     system.log().info("All process decided: {} in {} ms", r.value, (r.end - start) * 1e-6)
                     false
                 }
+
                 is InProgress -> {
                     true
                 }
+
                 else -> {
                     cancellable.cancel()
                     system.log().error("Unexpected message: {}", r)

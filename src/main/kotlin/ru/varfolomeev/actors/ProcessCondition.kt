@@ -12,7 +12,7 @@ sealed interface ProcessCondition {
     }
 
     data class Valid(override var leader: Boolean, override var proposeCondition: ProposeCondition) : NotCrashed {
-        constructor() : this(true, ProposeCondition.NOT_STARTED)
+        constructor(leader: Boolean) : this(leader, ProposeCondition.NOT_STARTED)
     }
 
     data class FaultProne(override var proposeCondition: ProposeCondition) : NotCrashed {
