@@ -1,9 +1,9 @@
 package ru.varfolomeev.messages
 
-sealed interface CollectorMessage
+sealed class CollectorMessage : LoggedMessage()
 
-object CollectorCheck
+object CollectorCheck : LoggedMessage()
 
-data class AllDecided(val value: Int, val end: Long, val count: Int) : CollectorMessage
+data class AllDecided(val value: Int, val end: Long, val count: Int) : CollectorMessage()
 
-object InProgress : CollectorMessage
+object InProgress : CollectorMessage()

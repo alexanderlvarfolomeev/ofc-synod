@@ -1,9 +1,9 @@
 package ru.varfolomeev.messages
 
-sealed interface OuterMessage
+sealed class OuterMessage : LoggedMessage()
 
-object Launch : OuterMessage
+object Launch : OuterMessage()
 
-data class Decided(val processId: Int, val value: Int, val nanoTime: Long) : OuterMessage
+data class Crash(val crashProbability: Double) : OuterMessage()
 
-data class Crash(val crashProbability: Double) : OuterMessage
+data class Decided(val processId: Int, val value: Int, val nanoTime: Long) : OuterMessage()

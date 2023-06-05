@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory
 import ru.varfolomeev.actors.Collector
 import ru.varfolomeev.actors.Process
 import ru.varfolomeev.messages.*
+import ru.varfolomeev.messages.LeaderElectionMessage.*
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import java.util.concurrent.CountDownLatch
@@ -17,7 +18,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 class Main(private val processCount: Int, faultyCount: Int, private val faultProbability: Double) : AutoCloseable {
-    private val system = ActorSystem.create("process-system-$this")
+    private val system = ActorSystem.create("process-system-${toString().let { it.substring(it.length - 8) }}")
     private var leaderNumber: Int = 0
     private val processes = ArrayList<ActorRef>(processCount)
     private val faults: List<ActorRef>
@@ -99,14 +100,12 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
     }
 
     override fun close() {
-        (LoggerFactory.getILoggerFactory() as LoggerContext).stop()
         system.terminate()
-        print(Await.result(system.whenTerminated(), Duration.Inf()))
-    }
-
-    override fun toString(): String {
-        val str = super.toString()
-        return str.substring(str.length - 8)
+        Await.result(system.whenTerminated(), Duration.Inf()).also {
+            print("Waiting for loggers... ")
+            (LoggerFactory.getILoggerFactory() as LoggerContext).stop()
+            println("Complete.")
+        }
     }
 }
 

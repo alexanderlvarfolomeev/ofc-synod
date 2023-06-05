@@ -1,4 +1,4 @@
-package ru.varfolomeev
+package ru.varfolomeev.logback
 
 import ch.qos.logback.classic.AsyncAppender
 

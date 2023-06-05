@@ -2,19 +2,20 @@
 <configuration>
     <import class="ch.qos.logback.core.hook.DefaultShutdownHook"/>
     <import class="ch.qos.logback.core.FileAppender"/>
+    <import class="ru.varfolomeev.logback.SleepAsyncAppender"/>
 
 
     <appender name="FILE" class="FileAppender">
         <file>app.log</file>
         <append>false</append>
-        <immediateFlush>false</immediateFlush>
+        <immediateFlush>true</immediateFlush>
         <encoder>
             <pattern>[%level] [%d{HH:mm:ss.SSS}%ms] [%logger] - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <appender name="ASYNC" class="ru.varfolomeev.SleepAsyncAppender">
-        <queueSize>1000000</queueSize>
+    <appender name="ASYNC" class="SleepAsyncAppender">
+        <queueSize>100000</queueSize>
         <neverBlock>false</neverBlock>
         <maxFlushTime>0</maxFlushTime>
         <discardingThreshold>0</discardingThreshold>

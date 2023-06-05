@@ -1,11 +1,6 @@
 package ru.varfolomeev.actors
 
-//enum class ProcessCondition {
-//    NOT_STARTED, AWAIT_PROPOSE, PROPOSE, DECIDED, CRASHED
-//}
-
 sealed interface ProcessCondition {
-
     sealed interface NotCrashed : ProcessCondition {
         val leader: Boolean
         var proposeCondition: ProposeCondition

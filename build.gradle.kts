@@ -15,12 +15,6 @@ dependencies {
     implementation("com.typesafe.akka:akka-actor_3:2.8.2")
     implementation("com.typesafe.akka:akka-slf4j_3:2.8.2")
     implementation("ch.qos.logback:logback-classic:1.4.6")
-
-    testImplementation(kotlin("test"))
-}
-
-tasks.test {
-    useJUnitPlatform()
 }
 
 kotlin {

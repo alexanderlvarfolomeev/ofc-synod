@@ -6,6 +6,8 @@ import ru.varfolomeev.actors.ProcessCondition.ProposeCondition.*
 import ru.varfolomeev.broadcastMessage
 import ru.varfolomeev.mapInPlace
 import ru.varfolomeev.messages.*
+import ru.varfolomeev.messages.LeaderElectionMessage.*
+import ru.varfolomeev.messages.ProposeMessage.*
 import kotlin.random.Random
 
 class Process(
@@ -21,9 +23,9 @@ class Process(
     private var imposeballot: Long = ballot
     private var estimate: Int? = null
     private val states = Array<Pair<Int?, Long>>(processes.size) { null to -1 }
+
     private var stateCount = 0
     private var ackCount = 0
-
     private val majority = processes.size / 2 + 1
 
     @OnReceive
