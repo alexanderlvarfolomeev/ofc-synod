@@ -5,8 +5,6 @@ import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.pattern.AskableActorRef
 import akka.util.Timeout
-import ch.qos.logback.classic.LoggerContext
-import org.slf4j.LoggerFactory
 import ru.varfolomeev.actors.Collector
 import ru.varfolomeev.actors.Process
 import ru.varfolomeev.messages.*
@@ -23,7 +21,7 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
     private val processes = ArrayList<ActorRef>(processCount)
     private val faults: List<ActorRef>
     private val corrects: List<ActorRef>
-    private val collector = AskableActorRef(system.actorOf(Collector.props(processCount, faultyCount), "collector"))
+    private val collector = AskableActorRef(system.actorOf(Collector.props(processCount), "collector"))
 
     init {
         val latch = CountDownLatch(1)
@@ -40,10 +38,11 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
         faults = shuffled.take(faultyCount)
         corrects = shuffled.takeLast(processCount - faultyCount)
 
-        system.eventStream.subscribe(collector.actorRef(), Decided::class.java)
+        system.eventStream.subscribe(collector.actorRef(), ProcessDecided::class.java)
+        system.eventStream.subscribe(collector.actorRef(), ProcessCrashed::class.java)
     }
 
-    fun run() {
+    fun run(leaderElectionTime: Long) {
         val start = System.nanoTime()
 
         broadcastMessage(Launch, processes, ActorRef.noSender())
@@ -52,8 +51,8 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
 
         val cancellable = system.scheduler().scheduleWithFixedDelay(
             Duration.Zero(),
-            Duration.create(100, TimeUnit.MILLISECONDS),
-            this::changeLeader,
+            Duration.create(leaderElectionTime, TimeUnit.MILLISECONDS),
+            this::changeLeaderRandomly,
             system.dispatcher()
         )
 
@@ -73,6 +72,7 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
                         r.value,
                         (r.end - start) * 1e-6
                     )
+                    println("${r.count} of $processCount process decided: ${r.value} in ${(r.end - start) * 1e-6} ms")
                     false
                 }
 
@@ -91,9 +91,18 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
         }
     }
 
-    private fun changeLeader() {
+    @Suppress("unused")
+    private fun changeLeaderRoundRobin() {
+        changeLeader(leaderNumber % corrects.size)
+    }
+
+    private fun changeLeaderRandomly() {
+        changeLeader(Random.nextInt(corrects.size))
+    }
+
+    private fun changeLeader(leaderIdx: Int) {
         corrects.forEachIndexed { idx, actor ->
-            actor.tell(if (leaderNumber % corrects.size == idx) Leader else Hold, ActorRef.noSender())
+            actor.tell(if (leaderIdx == idx) Leader else Hold, ActorRef.noSender())
         }
 
         leaderNumber++
@@ -101,16 +110,15 @@ class Main(private val processCount: Int, faultyCount: Int, private val faultPro
 
     override fun close() {
         system.terminate()
-        Await.result(system.whenTerminated(), Duration.Inf()).also {
-            print("Waiting for loggers... ")
-            (LoggerFactory.getILoggerFactory() as LoggerContext).stop()
-            println("Complete.")
-        }
+        Await.result(system.whenTerminated(), Duration.Inf())
     }
 }
 
+/**
+ * Usage: main processCount maxFaultCount faultProbability leaderElectionTime
+ */
 fun main(args: Array<String>) {
     Main(args[0].toInt(), args[1].toInt(), args[2].toDouble()).use {
-        it.run()
+        it.run(args[3].toLong())
     }
 }

@@ -6,4 +6,6 @@ object Launch : OuterMessage()
 
 data class Crash(val crashProbability: Double) : OuterMessage()
 
-data class Decided(val processId: Int, val value: Int, val nanoTime: Long) : OuterMessage()
+data class ProcessCrashed(val processId: Int) : OuterMessage()
+
+data class ProcessDecided(val processId: Int, val value: Int, val nanoTime: Long) : OuterMessage()

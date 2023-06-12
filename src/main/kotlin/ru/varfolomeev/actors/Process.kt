@@ -170,7 +170,7 @@ class Process(
     fun receive(decide: Decide) = wrapProposeEvent {
         if (it.proposeCondition != DECIDED) {
             it.proposeCondition = DECIDED
-            context.system.eventStream.publish(Decided(processId, decide.value, System.nanoTime()))
+            publish(ProcessDecided(processId, decide.value, System.nanoTime()))
             broadcast(decide)
             log.info("Desided: {}", decide.value)
         }
@@ -189,6 +189,25 @@ class Process(
         ackCount = 0
     }
 
+    private fun wrapProposeEvent(event: (NotCrashed) -> Unit) =
+        when (val cond = condition) {
+            Crashed -> {
+            }
+
+            is FaultProne -> {
+                if (Random.nextDouble() < cond.crashProbability) {
+                    condition = Crashed
+                    publish(ProcessCrashed(processId))
+                } else {
+                    event(cond)
+                }
+            }
+
+            is Valid -> {
+                event(cond)
+            }
+        }
+
     private fun tell(message: Any, receiver: ActorRef) {
         receiver.tell(message, self)
         log.info("Message {} sent to {}.", message, receiver.path().name().replace('-', '#'))
@@ -199,21 +218,8 @@ class Process(
         log.info("Broadcasted: {}", message)
     }
 
-    private fun wrapProposeEvent(event: (NotCrashed) -> Unit) =
-        when (val cond = condition) {
-            Crashed -> {
-            }
-
-            is FaultProne -> {
-                if (Random.nextDouble() < cond.crashProbability) {
-                    condition = Crashed
-                } else {
-                    event(cond)
-                }
-            }
-
-            is Valid -> {
-                event(cond)
-            }
-        }
+    private fun publish(message: Any) {
+        context.system.eventStream.publish(message)
+        log.info("Published: {}", message)
+    }
 }
