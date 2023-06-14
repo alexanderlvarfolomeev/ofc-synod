@@ -197,7 +197,10 @@ class Process(
             is FaultProne -> {
                 if (Random.nextDouble() < cond.crashProbability) {
                     condition = Crashed
-                    publish(ProcessCrashed(processId))
+                    if (cond.proposeCondition != DECIDED) {
+                        publish(ProcessCrashed(processId))
+                    } else {
+                    }
                 } else {
                     event(cond)
                 }
